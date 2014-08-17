@@ -1,211 +1,115 @@
-# encoding: utf-8
+class ISO8601::Duration
 
-module ISO8601
-  ##
-  # Represents a duration in ISO 8601 format
-  #
-  # @todo Support fraction values for years, months, days, weeks, hours
-  #   and minutes
-  class Duration
-    attr_reader :base, :atoms
-    ##
-    # @param [String, Numeric] pattern The duration pattern
-    # @param [ISO8601::DateTime, nil] base (nil) The base datetime to
-    #   calculate the duration properly
-    def initialize(pattern, base = nil)
-      # we got seconds instead of an ISO8601 duration
-      pattern = "PT#{pattern}S" if (pattern.kind_of? Numeric)
-      @duration = /^(\+|-)? # Sign
-                   P(
-                      (
-                        (\d+(?:[,.]\d+)?Y)? # Years
-                        (\d+(?:[.,]\d+)?M)? # Months
-                        (\d+(?:[.,]\d+)?D)? # Days
-                        (T
-                          (\d+(?:[.,]\d+)?H)? # Hours
-                          (\d+(?:[.,]\d+)?M)? # Minutes
-                          (\d+(?:[.,]\d+)?S)? # Seconds
-                        )? # Time
-                      )
-                      |(\d+(?:[.,]\d+)?W) # Weeks
-                    ) # Duration
-                  $/x.match(pattern) or raise ISO8601::Errors::UnknownPattern.new(pattern)
+  attr_reader :years, :months, :weeks, :days, :hours, :minutes, :seconds, :sign
 
-      @base = base
-      valid_pattern?
-      valid_base?
-      @atoms = {
-        :years => @duration[4].nil? ? 0 : @duration[4].chop.to_f * sign,
-        :months => @duration[5].nil? ? 0 : @duration[5].chop.to_f * sign,
-        :weeks => @duration[11].nil? ? 0 : @duration[11].chop.to_f * sign,
-        :days => @duration[6].nil? ? 0 : @duration[6].chop.to_f * sign,
-        :hours => @duration[8].nil? ? 0 : @duration[8].chop.to_f * sign,
-        :minutes => @duration[9].nil? ? 0 : @duration[9].chop.to_f * sign,
-        :seconds => @duration[10].nil? ? 0 : @duration[10].chop.to_f * sign
-      }
-      valid_fractions?
-    end
-    ##
-    # Assigns a new base datetime
-    #
-    # @return [ISO8601::DateTime, nil]
-    def base=(value)
-      @base = value
-      valid_base?
-      return @base
-    end
-    ##
-    # @return [String] The string representation of the duration
-    def to_s
-      @duration[0]
-    end
-    ##
-    # @return [ISO8601::Years] The years of the duration
-    def years
-      ISO8601::Years.new(@atoms[:years], @base)
-    end
-    ##
-    # @return [ISO8601::Months] The months of the duration
-    def months
-      # Changes the base to compute the months for the right base year
-      base = @base.nil? ? nil : @base + self.years.to_seconds
-      ISO8601::Months.new(@atoms[:months], base)
-    end
-    ##
-    # @return [ISO8601::Weeks] The weeks of the duration
-    def weeks
-      ISO8601::Weeks.new(@atoms[:weeks], @base)
-    end
-    ##
-    # @return [ISO8601::Days] The days of the duration
-    def days
-      ISO8601::Days.new(@atoms[:days], @base)
-    end
-    ##
-    # @return [ISO8601::Hours] The hours of the duration
-    def hours
-      ISO8601::Hours.new(@atoms[:hours], @base)
-    end
-    ##
-    # @return [ISO8601::Minutes] The minutes of the duration
-    def minutes
-      ISO8601::Minutes.new(@atoms[:minutes], @base)
-    end
-    ##
-    # @return [ISO8601::Seconds] The seconds of the duration
-    def seconds
-      ISO8601::Seconds.new(@atoms[:seconds], @base)
-    end
-    ##
-    # @return [Numeric] The duration in seconds
-    def to_seconds
-      years, months, weeks, days, hours, minutes, seconds = self.years.to_seconds, self.months.to_seconds, self.weeks.to_seconds, self.days.to_seconds, self.hours.to_seconds, self.minutes.to_seconds, self.seconds.to_seconds
-      return years + months + weeks + days + hours + minutes + seconds
-    end
-    ##
-    # @return [ISO8601::Duration] The absolute representation of the duration
-    def abs
-      absolute = self.to_s.sub(/^[-+]/, '')
-      return ISO8601::Duration.new(absolute)
-    end
-    ##
-    # Addition
-    #
-    # @param [ISO8601::Duration] duration The duration to add
-    #
-    # @raise [ISO8601::Errors::DurationBaseError] If bases doesn't match
-    # @return [ISO8601::Duration]
-    def +(duration)
-      raise ISO8601::Errors::DurationBaseError.new(duration) if @base.to_s != duration.base.to_s
-      d1 = to_seconds
-      d2 = duration.to_seconds
-      return seconds_to_iso(d1 + d2)
-    end
-    ##
-    # Substraction
-    #
-    # @param [ISO8601::Duration] duration The duration to substract
-    #
-    # @raise [ISO8601::Errors::DurationBaseError] If bases doesn't match
-    # @return [ISO8601::Duration]
-    def -(duration)
-      raise ISO8601::Errors::DurationBaseError.new(duration) if @base.to_s != duration.base.to_s
-      d1 = to_seconds
-      d2 = duration.to_seconds
-      duration = d1 - d2
-      if duration == 0
-        return ISO8601::Duration.new('PT0S')
-      else
-        return seconds_to_iso(duration)
-      end
-    end
-    ##
-    # @param [ISO8601::Duration] duration The duration to compare
-    #
-    # @raise [ISO8601::Errors::DurationBaseError] If bases doesn't match
-    # @return [Boolean]
-    def ==(duration)
-      raise ISO8601::Errors::DurationBaseError.new(duration) if @base.to_s != duration.base.to_s
-      (self.to_seconds == duration.to_seconds)
-    end
-    ##
-    # @return [Fixnum]
-    def hash
-      @atoms.hash
-    end
+  def initialize(value)
+    match = /^(\+|-)? # Sign
+     P(
+        (
+          (\d+(?:[,.]\d+)?Y)? # Years
+          (\d+(?:[.,]\d+)?M)? # Months
+          (\d+(?:[.,]\d+)?D)? # Days
+          (T
+            (\d+(?:[.,]\d+)?H)? # Hours
+            (\d+(?:[.,]\d+)?M)? # Minutes
+            (\d+(?:[.,]\d+)?S)? # Seconds
+          )? # Time
+        )
+        |(\d+(?:[.,]\d+)?W) # Weeks
+      ) # Duration
+    $/x.match(value)
 
+    raise ArgumentError, 'invalid duration' unless match
 
-    private
-    ##
-    # @param [Numeric] duration The seconds to promote
-    #
-    # @return [ISO8601::Duration]
-    def seconds_to_iso(duration)
-      sign = '-' if (duration < 0)
-      duration = duration.abs
-      years, y_mod = (duration / self.years.factor).to_i, (duration % self.years.factor)
-      months, m_mod = (y_mod / self.months.factor).to_i, (y_mod % self.months.factor)
-      days, d_mod = (m_mod / self.days.factor).to_i, (m_mod % self.days.factor)
-      hours, h_mod = (d_mod / self.hours.factor).to_i, (d_mod % self.hours.factor)
-      minutes, mi_mod = (h_mod / self.minutes.factor).to_i, (h_mod % self.minutes.factor)
-      seconds = mi_mod.div(1) == mi_mod ? mi_mod.to_i : mi_mod.to_f # Coerce to Integer when needed (`PT1S` instead of `PT1.0S`)
-
-      seconds = (seconds != 0 or (years == 0 and months == 0 and days == 0 and hours == 0 and minutes == 0)) ? "#{seconds}S" : ""
-      minutes = (minutes != 0) ? "#{minutes}M" : ""
-      hours = (hours != 0) ? "#{hours}H" : ""
-      days = (days != 0) ? "#{days}D" : ""
-      months = (months != 0) ? "#{months}M" : ""
-      years = (years != 0) ? "#{years}Y" : ""
-
-      date = %[#{sign}P#{years}#{months}#{days}]
-      time = (hours != "" or minutes != "" or seconds != "") ? %[T#{hours}#{minutes}#{seconds}] : ""
-      date_time = date + time
-      return ISO8601::Duration.new(date_time)
+    @sign = (match[1] == '-' ? -1 : 1)
+    { years: 4, months: 5, weeks: 11, days: 6, hours: 8, minutes: 9, seconds: 10 }.each do |key, index|
+      instance_variable_set "@#{key}", match[index] ? match[index].chop.to_f * @sign : 0 
     end
+  end
 
-    def sign
-      (@duration[1].nil? or @duration[1] == "+") ? 1 : -1
-    end
-    def valid_base?
-      if !(@base.nil? or @base.kind_of? ISO8601::DateTime)
-        raise TypeError
-      end
-    end
-    def valid_pattern?
-      if @duration.nil? or
-         (@duration[4].nil? and @duration[5].nil? and @duration[6].nil? and @duration[7].nil? and @duration[11].nil?) or
-         (!@duration[7].nil? and @duration[8].nil? and @duration[9].nil? and @duration[10].nil? and @duration[11].nil?)
+  def present?
+    ! blank?
+  end
 
-        raise ISO8601::Errors::UnknownPattern.new(@duration)
-      end
-    end
+  def blank?
+    empty?
+  end
 
-    def valid_fractions?
-      values = @atoms.values.reject(&:zero?)
-      fractions = values.select { |a| (a % 1) != 0 }
-      if fractions.size > 1 || (fractions.size == 1 && fractions.last != values.last)
-        raise ISO8601::Errors::InvalidFractions.new(@duration)
-      end
-    end
+  def empty?
+    to_h.all? { |key, value| value.zero? }
+  end
+
+  def iso8601
+    return nil if blank?
+
+    day_parts = [:years, :months, :weeks, :days].collect do |key|
+      value = to_h[key].divmod(1)[1].zero?? to_h[key].to_i : to_h[key]
+      "#{value}#{key.to_s[0].upcase}" unless value.zero?
+    end.compact
+
+    time_parts = [:hours, :minutes, :seconds].collect do |key|
+      value = to_h[key].divmod(1)[1].zero?? to_h[key].to_i : to_h[key]
+      "#{value}#{key.to_s[0].upcase}" unless value.zero?
+    end.compact
+
+    "P#{day_parts.join}#{time_parts.any?? "T#{time_parts.join}" : ''}"
+  end
+
+  def eql?(other)
+    self.hash == other.hash
+  end
+
+  def ==(other)
+    eql? other
+  end
+
+  def hash
+    [self.class, to_h.to_a].hash
+  end
+
+  def inspect
+    "#<#{self.class.name}: #{to_s}>"
+  end
+
+  def to_s
+    singular = {
+      years:   'year',
+      months:  'month',
+      weeks:   'week',
+      days:    'day',
+      hours:   'hour',
+      minutes: 'minute',
+      seconds: 'second' }
+
+    to_h.collect do |key, value|
+      value = value.divmod(1)[1].zero?? value.to_i : value
+      value.zero?? nil : key == 1.0 ? "#{value} #{singular[key]}" : "#{value} #{key}"
+    end.compact.join(', ')
+  end
+
+  def to_f
+    { years:   31536000,
+      months:  2628000,
+      weeks:   604800,
+      days:    86400,
+      hours:   3600,
+      minutes: 60,
+      secodns: 1 }.collect do |key, value|
+        to_h[key] * value
+      end.sum
+  end
+
+  def to_i
+    to_f.to_i
+  end
+
+  def to_h
+    { years:   @years,
+      months:  @months,
+      weeks:   @weeks,
+      days:    @days,
+      hours:   @hours,
+      minutes: @minutes,
+      seconds: @seconds }
   end
 end

@@ -64,10 +64,10 @@ Unmatching precison is handled strongly. Notice the time fragment is lost in
 `DateTime.parse` without warning only if the loose precision is in the time
 component.
 
-    ISO8601::DateTime.new('2014-05-06T101112')  # => ISO8601::Errors::UnknownPattern
+    ISO8601::DateTime.new('2014-05-06T101112')  # => ArgumentError
     DateTime.parse('2014-05-06T101112')  # => #<DateTime: 2014-05-06T00:00:00+00:00 ((2456784j,0s,0n),+0s,2299161j)>
 
-    ISO8601::DateTime.new('20140506T10:11:12')  # => ISO8601::Errors::UnknownPattern
+    ISO8601::DateTime.new('20140506T10:11:12')  # => ArgumentError
     DateTime.parse('20140506T10:11:12')  # => #<DateTime: 2014-05-06T10:11:12+00:00 ((2456784j,0s,0n),+0s,2299161j)>
 
 
@@ -80,7 +80,7 @@ Ordinal dates keep the sign. `2014-001` is not the same as `-2014-001`.
 
 Week dates raise an error when two digit days provied instead of return monday:
 
-    ISO8601::DateTime.new('2014-W15-02') # => ISO8601::Errors::UnknownPattern
+    ISO8601::DateTime.new('2014-W15-02') # => ArgumentError
     DateTime.new('2014-W15-02')  # => #<Date: 2014-04-07 ((2456755j,0s,0n),+0s,2299161j)>
 
 
